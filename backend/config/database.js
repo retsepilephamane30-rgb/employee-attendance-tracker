@@ -1,36 +1,38 @@
 const mysql = require('mysql2/promise');
 
-let connection;
-
 const createConnection = async () => {
   try {
-    connection = await mysql.createConnection({
+    console.log('🔌 Attempting database connection...');
+    console.log('DB_HOST:', process.env.DB_HOST);
+    console.log('DB_USER:', process.env.DB_USER);
+    console.log('DB_NAME:', process.env.DB_NAME);
+    
+    const connection = await mysql.createConnection({
       host: process.env.DB_HOST,
       user: process.env.DB_USER,
       password: process.env.DB_PASSWORD,
       database: process.env.DB_NAME,
       port: process.env.DB_PORT || 3306,
-      waitForConnections: true,
-      connectionLimit: 10,
-      queueLimit: 0,
+      connectTimeout: 60000,
+      acquireTimeout: 60000,
+      timeout: 60000,
       reconnect: true
     });
 
     console.log('✅ Connected to MySQL database successfully!');
     
     // Create tables if they don't exist
-    await createTables();
+    await createTables(connection);
     
     return connection;
   } catch (error) {
     console.error('❌ Database connection failed:', error.message);
-    // Retry connection after 5 seconds
-    setTimeout(createConnection, 5000);
+    console.error('Full error:', error);
     throw error;
   }
 };
 
-const createTables = async () => {
+const createTables = async (connection) => {
   try {
     // Create employees table
     await connection.execute(`
@@ -68,16 +70,5 @@ const createTables = async () => {
     console.error('❌ Error creating tables:', error);
   }
 };
-
-// Handle connection errors
-connection?.on('error', async (err) => {
-  console.error('Database error:', err);
-  if (err.code === 'PROTOCOL_CONNECTION_LOST') {
-    console.log('Reconnecting to database...');
-    await createConnection();
-  } else {
-    throw err;
-  }
-});
 
 module.exports = createConnection;
