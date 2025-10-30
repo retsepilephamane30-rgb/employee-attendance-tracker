@@ -1,15 +1,24 @@
 import axios from 'axios';
 
-// Make sure this URL matches your backend
-const API_BASE_URL = 'http://localhost:5000/api/attendance';
+// Use environment variable for Railway backend URL, fallback to localhost for development
+const API_BASE_URL = process.env.REACT_APP_API_URL || 'http://localhost:5000';
 
 const api = axios.create({
-  baseURL: API_BASE_URL,
+  baseURL: `${API_BASE_URL}/api/attendance`,
   headers: {
     'Content-Type': 'application/json',
   },
   timeout: 10000,
 });
+
+// Add response interceptor for better error handling
+api.interceptors.response.use(
+  (response) => response,
+  (error) => {
+    console.error('API Error:', error.response?.data || error.message);
+    return Promise.reject(error);
+  }
+);
 
 export const attendanceAPI = {
   // Get all attendance records
@@ -27,3 +36,5 @@ export const attendanceAPI = {
   // Filter by date
   filterByDate: (date) => api.get(`/filter?date=${date}`),
 };
+
+export default api;
