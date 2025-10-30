@@ -1,7 +1,7 @@
 import axios from 'axios';
 
-// Use environment variable for Railway backend URL, fallback to localhost for development
-const API_BASE_URL = process.env.REACT_APP_API_URL || 'http://localhost:5000';
+// Use your Railway backend URL - it's running on port 8080
+const API_BASE_URL = process.env.REACT_APP_API_URL || 'https://employee-attendance-tracker-production.up.railway.app';
 
 const api = axios.create({
   baseURL: `${API_BASE_URL}/api/attendance`,
