@@ -1,83 +1,83 @@
-const mysql = require('mysql2');
-require('dotenv').config();
+const mysql = require('mysql2/promise');
 
-// Create MySQL connection
-const connection = mysql.createConnection({
-  host: process.env.DB_HOST || 'localhost',
-  user: process.env.DB_USER || 'root',
-  password: process.env.DB_PASSWORD || '123456',
-  database: process.env.DB_NAME || 'attendance_tracker',
-  port: process.env.DB_PORT || 3306
-});
+let connection;
 
-// Connect to MySQL
-connection.connect((err) => {
-  if (err) {
-    console.error('❌ ERROR connecting to MySQL:', err.message);
-    console.error('💡 Please check:');
-    console.error('   - Is MySQL service running?');
-    console.error('   - Are the database credentials correct?');
-    console.error('   - Does the database exist?');
-  } else {
+const createConnection = async () => {
+  try {
+    connection = await mysql.createConnection({
+      host: process.env.DB_HOST,
+      user: process.env.DB_USER,
+      password: process.env.DB_PASSWORD,
+      database: process.env.DB_NAME,
+      port: process.env.DB_PORT || 3306,
+      waitForConnections: true,
+      connectionLimit: 10,
+      queueLimit: 0,
+      reconnect: true
+    });
+
     console.log('✅ Connected to MySQL database successfully!');
-    initializeDatabase();
+    
+    // Create tables if they don't exist
+    await createTables();
+    
+    return connection;
+  } catch (error) {
+    console.error('❌ Database connection failed:', error.message);
+    // Retry connection after 5 seconds
+    setTimeout(createConnection, 5000);
+    throw error;
+  }
+};
+
+const createTables = async () => {
+  try {
+    // Create employees table
+    await connection.execute(`
+      CREATE TABLE IF NOT EXISTS employees (
+        id INT AUTO_INCREMENT PRIMARY KEY,
+        employee_id VARCHAR(20) UNIQUE NOT NULL,
+        name VARCHAR(100) NOT NULL,
+        email VARCHAR(100) UNIQUE NOT NULL,
+        position VARCHAR(100),
+        department VARCHAR(100),
+        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+        updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP
+      )
+    `);
+
+    // Create attendance table
+    await connection.execute(`
+      CREATE TABLE IF NOT EXISTS attendance (
+        id INT AUTO_INCREMENT PRIMARY KEY,
+        employee_id VARCHAR(20) NOT NULL,
+        check_in TIMESTAMP NULL,
+        check_out TIMESTAMP NULL,
+        date DATE NOT NULL,
+        total_hours DECIMAL(5,2) DEFAULT 0,
+        status ENUM('present', 'absent', 'late', 'half-day') DEFAULT 'present',
+        notes TEXT,
+        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+        updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+        FOREIGN KEY (employee_id) REFERENCES employees(employee_id) ON DELETE CASCADE
+      )
+    `);
+
+    console.log('✅ Database tables ready');
+  } catch (error) {
+    console.error('❌ Error creating tables:', error);
+  }
+};
+
+// Handle connection errors
+connection?.on('error', async (err) => {
+  console.error('Database error:', err);
+  if (err.code === 'PROTOCOL_CONNECTION_LOST') {
+    console.log('Reconnecting to database...');
+    await createConnection();
+  } else {
+    throw err;
   }
 });
 
-function initializeDatabase() {
-  // Create table if it doesn't exist
-  const createTableQuery = `
-    CREATE TABLE IF NOT EXISTS attendance (
-      id INT AUTO_INCREMENT PRIMARY KEY,
-      employeeName VARCHAR(255) NOT NULL,
-      employeeID VARCHAR(100) NOT NULL,
-      date DATE NOT NULL,
-      status ENUM('Present', 'Absent') NOT NULL,
-      created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
-    )
-  `;
-  
-  connection.query(createTableQuery, (err) => {
-    if (err) {
-      console.error('Error creating table:', err.message);
-    } else {
-      console.log('✅ Attendance table ready.');
-      
-      // Check if table has data
-      connection.query('SELECT COUNT(*) as count FROM attendance', (err, results) => {
-        if (err) {
-          console.error('Error checking data:', err.message);
-        } else {
-          const recordCount = results[0].count;
-          console.log(`📊 Database has ${recordCount} records.`);
-          
-          if (recordCount === 0) {
-            insertSampleData();
-          }
-        }
-      });
-    }
-  });
-}
-
-function insertSampleData() {
-  const insertQuery = `
-    INSERT INTO attendance (employeeName, employeeID, date, status) VALUES
-    ('MPHO', 'EMP001', CURDATE(), 'Present'),
-    ('NEO', 'EMP002', CURDATE(), 'Present'),
-    ('RETSEPILE', 'EMP003', CURDATE(), 'Absent'),
-    ('MICHEAL', 'EMP004', CURDATE(), 'Present'),
-    ('THABO', 'EMP005', CURDATE(), 'Present'),
-    ('THABANG', 'EMP006', CURDATE(), 'Absent')
-  `;
-  
-  connection.query(insertQuery, (err) => {
-    if (err) {
-      console.error('Error inserting sample data:', err.message);
-    } else {
-      console.log('✅ Sample data inserted successfully!');
-    }
-  });
-}
-
-module.exports = connection;
+module.exports = createConnection;
