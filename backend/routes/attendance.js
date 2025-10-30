@@ -34,4 +34,25 @@ router.get('/', async (req, res) => {
   }
 });
 
-// ... rest of your routes with similar connection handling
+// Add new attendance record
+router.post('/', async (req, res) => {
+  console.log('📨 POST request received for /api/attendance');
+  try {
+    const { employee_id, check_in, check_out, date, status, notes } = req.body;
+    
+    const connection = await getConnection();
+    const [result] = await connection.execute(
+      'INSERT INTO attendance (employee_id, check_in, check_out, date, status, notes) VALUES (?, ?, ?, ?, ?, ?)',
+      [employee_id, check_in, check_out, date, status, notes]
+    );
+    
+    console.log('✅ Attendance record created with ID:', result.insertId);
+    res.json({ message: 'Attendance record created successfully', id: result.insertId });
+  } catch (error) {
+    console.error('❌ Error creating attendance:', error);
+    res.status(500).json({ error: 'Failed to create attendance record', details: error.message });
+  }
+});
+
+// Make sure this is at the end of the file
+module.exports = router;
